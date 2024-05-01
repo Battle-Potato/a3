@@ -1,3 +1,4 @@
+#pragma once
+#include "structs.h"
 
-
-int smallsh_exit(char*);
+int smallsh_exit(exec_params*);

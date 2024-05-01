@@ -1,4 +1,5 @@
+#pragma once
+#include "structs.h"
 
 
-
-int cd(char*);
+int cd(exec_params*);

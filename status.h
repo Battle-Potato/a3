@@ -1,2 +1,4 @@
+#pragma once
+#include "structs.h"
 
-int status(char*);
+int status(exec_params*);
