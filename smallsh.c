@@ -85,7 +85,7 @@ exec_params* parse_args(char* args, int length){
         length--;
     }
     
-    //until > or < is found, do nothing
+    //until > or < is found, do nothing.
     
     //if either are found, null the space before the char
 
