@@ -35,7 +35,7 @@ void shell(){
         printf(" : ");
         fgets(input, BUFFER_SIZE, stdin);
 
-        //TODO: expand && to pid
+        expand_input(input);    
         int args_len = get_args(input, command, args);
 
         exec_params* params = parse_args(args, args_len);
@@ -124,10 +124,6 @@ exec_params* parse_args(char* args, int length){
 
 void external_command(char* command, exec_params* params, int* status){
     char** args = parse_input(params);
-    for(int i = 0; args[i] != NULL; i++){
-        if(args[i] != NULL)
-            printf("args[%d]: %s\n", i, args[i]);
-    }
     pid_t child_pid = fork();
     if(child_pid == -1){
         perror("fork");
@@ -168,4 +164,44 @@ char** parse_input(exec_params* params){
     }
     args[i] = NULL;
     return args;
+}
+
+
+void expand_input(char* input){
+    int i = 0;
+    while(1){
+        if(input[i] == '\n')
+            break;
+        if(input[i] == '$'){
+            //check if & is at the end of the line
+            if(input[i + 1] == '\n'){
+                break;
+            }
+            //check if & is followed by &
+            if(input[i + 1] == '$'){
+                input[i] = '\0';
+                input[i + 1] = '\0';
+                //get pid length
+                char pid[10];
+                sprintf(pid, "%d", shell_pid);
+                int pid_len = strlen(pid);
+                char* next_char = input + i + 2;
+                //shift next_char and everything after to the right by pid_len - 2
+                char* seeker = next_char;
+                while(*seeker != '\n'){
+                    seeker++;
+                }
+                while(seeker != next_char - 1){
+                    char* destination = seeker + pid_len - 2;
+                    *destination = *seeker;
+                    seeker--;
+                }
+                //copy pid into input
+                for(int j = 0; j < pid_len; j++){
+                    input[i + j] = pid[j];
+                }
+            }
+        }
+        i++;
+    }
 }

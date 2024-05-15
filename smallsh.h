@@ -11,3 +11,5 @@ void external_command(char*, exec_params*, int*);
 char** parse_input(exec_params*);
 
 void shell();
+
+void expand_input(char*);
