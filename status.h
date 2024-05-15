@@ -1,4 +1,4 @@
 #pragma once
 #include "structs.h"
 
-int status(exec_params*);
+int status(int, int);
