@@ -5,5 +5,5 @@ typedef struct s_exec_params{
     int background;
     char* input_file;
     char* output_file; 
-    char* args;  
+    char* clean_args;  
 } exec_params;

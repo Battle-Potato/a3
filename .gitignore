@@ -1,2 +1,5 @@
 *.o
 smallsh
+.gdb_history
+test
+test/*

@@ -17,6 +17,7 @@ int main(){
 
     while(1){
         //these need to be converted later to a non printf version reference 4/24 lecture
+        printf("%s", getcwd(NULL, 0));
         printf(": ");
         fgets(input, BUFFER_SIZE, stdin);
         int args_len = get_args(input, command, args);
@@ -65,7 +66,7 @@ int get_args(char* input, char* command, char* args){
     strcpy(args, input + i);
     int len = strlen(args);
     args[--len] = '\0';
-    return len;
+    return len - 1;
 }
 
 exec_params* parse_args(char* args, int length){
@@ -73,7 +74,8 @@ exec_params* parse_args(char* args, int length){
     params->background = 0;
     params->input_file = NULL;
     params->output_file = NULL;
-    params->args = NULL;
+    params->clean_args = args;
+    params->length = length;
 
     //parse args
     if (length == 0){
@@ -84,14 +86,23 @@ exec_params* parse_args(char* args, int length){
         args[length - 1] = '\0';
         length--;
     }
-    
-    //until > or < is found, do nothing.
-    
-    //if either are found, null the space before the char
 
-    //if < is found, copy the next word into input_file
-
-    //if > is found, copy the next word into output_file
+    params->input_file = strchr(args, '<');
+    params->output_file = strchr(args, '>');
+    if(params->input_file != NULL){
+        *params->input_file = '\0';
+        params->input_file++;
+        while(*params->input_file == ' '){
+            params->input_file++;
+        }
+    }
+    if(params->output_file != NULL){
+        *params->output_file = '\0';
+        params->output_file++;
+        while(*params->output_file == ' '){
+            params->output_file++;
+        }
+    }
 
     return params;
 }
