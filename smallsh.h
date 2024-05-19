@@ -10,9 +10,9 @@ void external_command(char*, exec_params*, int*);
 
 char** parse_input(exec_params*);
 
-int redirect_input(char*);
+int redirect_input(exec_params*);
 
-int redirect_output(char*);
+int redirect_output(exec_params*);
 
 void shell();
 

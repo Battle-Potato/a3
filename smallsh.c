@@ -136,16 +136,24 @@ exec_params* parse_args(char* args, int length){
         while(*seeker != ' ' && *seeker != '\0'){
             seeker++;
         }
+        *seeker = '\0';
     }
 
     return params;
 }
 
-int redirect_input(char* file){
-    int fd = open(file, O_RDONLY);
+int redirect_input(exec_params* params){
+    int fd = -2;
+    if(params->background == 1 && params->input_file == NULL )
+        fd = open("/dev/null", O_RDONLY, 0644);
+    else if(params->input_file != NULL)
+        fd = open(params->input_file, O_RDONLY);
     if(fd == -1){
         perror("open");
         return 1;
+    }
+    if(fd == -2){
+        return 0;
     }
     int new_fd = dup2(fd, 0);
     if(new_fd == -1){
@@ -156,11 +164,18 @@ int redirect_input(char* file){
     return 0;
 }
 
-int redirect_output(char* file){
-    int fd = open(file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+int redirect_output(exec_params* params){
+    int fd = -2;
+    if(params->background == 1 && params->output_file == NULL)
+        fd = open("/dev/null", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    else if(params->output_file != NULL)
+        fd = open(params->output_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if(fd == -1){
         perror("open");
         return 1;
+    }
+    if(fd == -2){
+        return 0;
     }
     int new_fd = dup2(fd, 1);
     if(new_fd == -1){
@@ -182,15 +197,13 @@ void external_command(char* command, exec_params* params, int* status){
         //child process
 
 
-        int input_status = 0;
         //redirect input
-        if(params->input_file != NULL)
-            input_status = redirect_input(params->input_file);
+        int input_status = 0;
+        input_status = redirect_input(params);
 
-        int output_status = 0;
         //redirect output
-        if(params->output_file != NULL)
-            output_status = redirect_output(params->output_file);
+        int output_status = 0;
+        output_status = redirect_output(params);
 
         if(output_status == 1){
             write(1, "Error redirecting output\n", 26);
