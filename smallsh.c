@@ -3,6 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <fcntl.h>           
 #include "smallsh.h"
 #include "cd.h"
 #include "exit.h"
@@ -15,6 +16,8 @@
 pid_t bg_processes[52] = {0};
 pid_t fg_process;
 pid_t shell_pid;
+int i_status = 0;
+int sig = 0;
 
 int main(){
 
@@ -27,8 +30,7 @@ void shell(){
     char* input = (char*)calloc(BUFFER_SIZE, sizeof(char));
     char* command = (char*)calloc(BUFFER_SIZE, sizeof(char));
     char* args = (char*)calloc(BUFFER_SIZE, sizeof(char));
-    int i_status = 0;
-    int sig = 0;
+
     while(1){
         //these need to be converted later to a non printf version reference 4/24 lecture
         printf("%s", getcwd(NULL, 0));
@@ -44,7 +46,7 @@ void shell(){
             cd(params);
         } else if(strcmp(command, "exit") == 0){
             smallsh_exit(params);
-            return 0;
+            return;
         } else if(strcmp(command, "status") == 0){
             status(i_status, sig);
         } else if(strcmp(command, "") == 0){
@@ -102,14 +104,27 @@ exec_params* parse_args(char* args, int length){
         length--;
     }
 
+    //get input char
     params->input_file = strchr(args, '<');
+
+    //get output char
     params->output_file = strchr(args, '>');
+
+    //remove trailing spaces
+    char* seeker = NULL;
+
+
     if(params->input_file != NULL){
         *params->input_file = '\0';
         params->input_file++;
         while(*params->input_file == ' '){
             params->input_file++;
         }
+        seeker = params->input_file;
+        while(*seeker != ' ' && *seeker != '\0'){
+            seeker++;
+        }
+        *seeker = '\0';
     }
     if(params->output_file != NULL){
         *params->output_file = '\0';
@@ -117,9 +132,43 @@ exec_params* parse_args(char* args, int length){
         while(*params->output_file == ' '){
             params->output_file++;
         }
+        seeker = params->output_file;
+        while(*seeker != ' ' && *seeker != '\0'){
+            seeker++;
+        }
     }
 
     return params;
+}
+
+int redirect_input(char* file){
+    int fd = open(file, O_RDONLY);
+    if(fd == -1){
+        perror("open");
+        return 1;
+    }
+    int new_fd = dup2(fd, 0);
+    if(new_fd == -1){
+        perror("dup2");
+        exit(1);
+    }
+    close(fd);
+    return 0;
+}
+
+int redirect_output(char* file){
+    int fd = open(file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if(fd == -1){
+        perror("open");
+        return 1;
+    }
+    int new_fd = dup2(fd, 1);
+    if(new_fd == -1){
+        perror("dup2");
+        exit(1);
+    }
+    close(fd);
+    return 0;
 }
 
 void external_command(char* command, exec_params* params, int* status){
@@ -131,9 +180,31 @@ void external_command(char* command, exec_params* params, int* status){
     }
     if(child_pid == 0){
         //child process
-        execvp(command, args);
-        perror("execvp");
-        exit(1);
+
+
+        int input_status = 0;
+        //redirect input
+        if(params->input_file != NULL)
+            input_status = redirect_input(params->input_file);
+
+        int output_status = 0;
+        //redirect output
+        if(params->output_file != NULL)
+            output_status = redirect_output(params->output_file);
+
+        if(output_status == 1){
+            write(1, "Error redirecting output\n", 26);
+            exit(1);
+        }
+        else if (input_status == 1){
+            write(1, "Error redirecting input\n", 25);
+            exit(1);
+        }
+        else{
+            execvp(command, args);
+            write(1, "Invalid command\n", 16);
+            exit(1);
+        }
     }
     else{
         //parent process
@@ -141,6 +212,7 @@ void external_command(char* command, exec_params* params, int* status){
             //TODO: prevent build up of zombie processes
             fg_process = child_pid;
             waitpid(child_pid, status, 0);
+            *status = WEXITSTATUS(*status);
         }
         else{
             int i = 0;
@@ -169,6 +241,7 @@ char** parse_input(exec_params* params){
 
 void expand_input(char* input){
     int i = 0;
+    //TODO: REMOVE INTERNAL '&' AS WILL CONFUSE BASH (maybe ignore?)
     while(1){
         if(input[i] == '\n')
             break;

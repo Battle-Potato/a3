@@ -3,3 +3,8 @@ smallsh
 .gdb_history
 test
 test/*
+/TODO.txt
+*.in
+*.out
+/.vscode
+/test
