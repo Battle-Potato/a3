@@ -33,7 +33,8 @@ void shell(){
 
     while(1){
         //these need to be converted later to a non printf version reference 4/24 lecture
-        printf("%s", getcwd(NULL, 0));
+        char* path = getcwd(NULL, 0);
+        printf("%s", path);
         printf(" : ");
         fgets(input, BUFFER_SIZE, stdin);
 
@@ -46,6 +47,11 @@ void shell(){
             cd(params);
         } else if(strcmp(command, "exit") == 0){
             smallsh_exit(params);
+            free(path);
+            free(params);
+            free(input);
+            free(command);
+            free(args);
             return;
         } else if(strcmp(command, "status") == 0){
             status(i_status, sig);
@@ -56,6 +62,8 @@ void shell(){
         } else {
             external_command(command, params, &i_status);
         }
+        free(params);
+        free(path);
     }
 }
 

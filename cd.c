@@ -4,6 +4,7 @@
 #include "cd.h"
 
 int cd(exec_params* params){
+    //TODO: check if CD is working as expected
     printf("Background processes: %d\n", params->background);
     printf("Input file:%s\n", params->input_file);
     printf("Output file:%s\n", params->output_file);
