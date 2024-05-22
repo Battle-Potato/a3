@@ -1,4 +1,4 @@
 #pragma once
-#include "structs.h"
+#include <sys/types.h>
 
-int smallsh_exit(exec_params*);
+int smallsh_exit(pid_t*);

@@ -8,3 +8,5 @@ test/*
 *.out
 /.vscode
 /test
+p3testscript-1
+junk*

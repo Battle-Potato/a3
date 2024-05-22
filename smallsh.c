@@ -3,6 +3,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/types.h>
+#include <signal.h>
 #include <fcntl.h>           
 #include "smallsh.h"
 #include "cd.h"
@@ -18,25 +20,62 @@ pid_t fg_process;
 pid_t shell_pid;
 int i_status = 0;
 int sig = 0;
+int background_lock = 0;
+int change_lock = 0;
+int signal_caught = 0;
 
 int main(){
 
+    handler_setup();
     shell_pid = getpid();
+    // printf("Shell PID: %d\n", shell_pid);
     shell();
     return 0;
 }
 
 void shell(){
     char* input = (char*)calloc(BUFFER_SIZE, sizeof(char));
+    char** input_adr = &input;
     char* command = (char*)calloc(BUFFER_SIZE, sizeof(char));
     char* args = (char*)calloc(BUFFER_SIZE, sizeof(char));
+    size_t max_size = BUFFER_SIZE;
 
     while(1){
+        reset_args(input, command, args);
+        if(change_lock == 1){
+            change_lock = 0;
+            if(background_lock == 0)
+                write(1, "Exiting foreground-only mode\n", 30);
+            else
+                write(1, "Entering foreground-only mode (& is now ignored)\n", 49);
+        }
+
+        if(signal_caught == 1){
+            // printf("Caught signal %d\n", sig);
+            signal_caught = 0;
+            continue;
+        }
+
+        kill_zombies();
+       
         //these need to be converted later to a non printf version reference 4/24 lecture
-        char* path = getcwd(NULL, 0);
-        printf("%s", path);
+        // char* path = getcwd(NULL, 0); //TODO: dont print this in final version
+        // printf("%s", path);
         printf(" : ");
-        fgets(input, BUFFER_SIZE, stdin);
+        fflush(stdout);
+        fgets(input, BUFFER_SIZE, stdin);        input_adr = &input;
+
+        if(signal_caught == 1){
+            // printf("Caught signal %d\n", sig);
+            signal_caught = 0;
+            continue;
+        }
+
+        // if (input[0] == '\n' || input[0] == '#' || input[0] == '\0')
+        // {
+        //     continue;
+        // }
+        
 
         expand_input(input);    
         int args_len = get_args(input, command, args);
@@ -46,8 +85,8 @@ void shell(){
         if(strcmp(command, "cd") == 0){
             cd(params);
         } else if(strcmp(command, "exit") == 0){
-            smallsh_exit(params);
-            free(path);
+            smallsh_exit(bg_processes);
+            // free(path);
             free(params);
             free(input);
             free(command);
@@ -55,6 +94,7 @@ void shell(){
             return;
         } else if(strcmp(command, "status") == 0){
             status(i_status, sig);
+            sig = 0;
         } else if(strcmp(command, "") == 0){
             continue;
         } else if(strcmp(command, "#") == 0){
@@ -63,10 +103,39 @@ void shell(){
             external_command(command, params, &i_status);
         }
         free(params);
-        free(path);
+        // free(path);
     }
 }
 
+void reset_args(char* input, char* command, char* args){
+
+    for(int i = 0; i < BUFFER_SIZE; i++){
+        input[i] = '\0';
+        command[i] = '\0';
+        args[i] = '\0';
+    }
+}
+
+void kill_zombies(){
+    // printf("Checking for zombies\n");
+
+    int i = 0;
+    while(bg_processes[i] != 0){
+        int status;
+        // printf("Checking for zombie process %d\n", bg_processes[i]);
+        pid_t pid = waitpid(bg_processes[i], &status, WNOHANG);
+        if(pid > 0){
+            if(WIFEXITED(status)){
+                printf("Background process %d exited with status %d\n", bg_processes[i], WEXITSTATUS(status));
+            }
+            else if(WIFSIGNALED(status)){
+                printf("Background process %d terminated by signal %d\n", bg_processes[i], WTERMSIG(status));
+            }
+            bg_processes[i] = 0;
+        }
+        i++;
+    }
+}
 
 int get_args(char* input, char* command, char* args){
     if(input[0] == '#' || input[0] == '\n'){
@@ -107,7 +176,8 @@ exec_params* parse_args(char* args, int length){
         return params;
     }
     if (args[length] == '&'){
-        params->background = 1;
+        if(background_lock == 0)
+            params->background = 1;
         args[length] = '\0';
         length--;
     }
@@ -222,6 +292,19 @@ void external_command(char* command, exec_params* params, int* status){
             exit(1);
         }
         else{
+            struct sigaction SIGINT_ignore, SIGTSTP_ignore = {0};
+
+            if(params->background == 1){
+
+                SIGINT_ignore.sa_handler = SIG_IGN;
+                sigfillset(&SIGINT_ignore.sa_mask);
+                SIGINT_ignore.sa_flags = 0;
+                sigaction(SIGINT, &SIGINT_ignore, NULL);
+            }
+            SIGTSTP_ignore.sa_handler = SIG_IGN;
+            sigfillset(&SIGTSTP_ignore.sa_mask);
+            SIGTSTP_ignore.sa_flags = 0;
+            sigaction(SIGTSTP, &SIGTSTP_ignore, NULL);
             execvp(command, args);
             write(1, "Invalid command\n", 16);
             exit(1);
@@ -234,12 +317,14 @@ void external_command(char* command, exec_params* params, int* status){
             fg_process = child_pid;
             waitpid(child_pid, status, 0);
             *status = WEXITSTATUS(*status);
+            fg_process = 0;
         }
         else{
             int i = 0;
             while(bg_processes[i] != 0){
                 i++;
             }
+            bg_processes[i] = child_pid;
             printf("Background process started with PID %d\n", child_pid);
         }
     }
@@ -298,4 +383,43 @@ void expand_input(char* input){
         }
         i++;
     }
+}
+
+void handler_setup(){
+    struct sigaction SIGTSTP_action, SIGINT_action = {0};
+
+    SIGTSTP_action.sa_handler = handle_SIGTSTP;
+    sigfillset(&SIGTSTP_action.sa_mask);
+    SIGTSTP_action.sa_flags = 0;
+    sigaction(SIGTSTP, &SIGTSTP_action, NULL);   
+
+    SIGINT_action.sa_handler = handle_SIGINT;
+    sigfillset(&SIGINT_action.sa_mask);
+    SIGINT_action.sa_flags = 0;
+    sigaction(SIGINT, &SIGINT_action, NULL);
+}
+
+void handle_SIGINT(int signo){
+    // char* message = "Caught SIGINT\n\n";
+    // write(1, message, 15);
+    signal_caught = 1;
+    sig = signo;
+    // write(1, message, 15);
+}
+
+
+void handle_SIGTSTP(int signo){
+    // char* message = "Caught SIGTSTP\n\n";
+    // write(1, message, 18);
+    signal_caught = 1;
+    change_lock = 1;
+    if(background_lock == 0){
+        background_lock = 1;
+    }
+    else{
+        background_lock = 0;
+    }
+    waitpid(fg_process, &i_status, 0);
+    fg_process = 0;
+    // write(1, message, 18);
 }
