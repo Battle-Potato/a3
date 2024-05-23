@@ -16,11 +16,5 @@ status.o: status.c status.h
 clean: 
 	rm -f *.o $(exe)
 
-grind: $(exe)
-	valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes ./$(exe)
-
 empty:
 	r -f *.in *.out *.o $(exe)
-
-run: $(exe)
-	./$(exe)

@@ -67,7 +67,8 @@ int one_loop(char* input, char* command, char* args){
         //handle background lock
         handle_background();
         if(signal_caught == 1){
-            clean_terminated();
+            if(cleanup_pid != 0)
+                clean_terminated();
             signal_caught = 0;
             return 1;
         }
@@ -77,7 +78,7 @@ int one_loop(char* input, char* command, char* args){
        //get input
         printf(" : ");
         fflush(stdout);
-        fgets(input, BUFFER_SIZE, stdin);        
+        fgets(input, BUFFER_SIZE, stdin);    
 
         //prevents shell from "munching an input" if a signal is caught in the neutral state
         if(signal_caught == 1){
@@ -102,11 +103,11 @@ int one_loop(char* input, char* command, char* args){
             free(input);
             free(command);
             free(args);
-            return 0;;
+            return 0;
         } else if(strcmp(command, "status") == 0){ //get status of last foreground process
             status(i_status, sig);
             sig = 0;
-        } else if(strcmp(command, "") != 0 && strcmp(command, "#") == 0) {    //external or unknown command
+        } else if(strcmp(command, "") != 0 && strcmp(command, "#") != 0) {    //external or unknown command
             external_command(command, params, &i_status);
         }
         //reset params
@@ -196,6 +197,8 @@ int get_args(char* input, char* command, char* args){
 exec_params* set_params(char* args, int length){
     //create params struct
     exec_params* params = (exec_params*)calloc(1, sizeof(exec_params));
+    params->length = length;
+    params->clean_args = args;
 
     //if the length of args is 0, there is nothing to parse
     if (length == 0){
